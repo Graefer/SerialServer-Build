@@ -1,0 +1,16 @@
+# Build artifacts
+build/
+*.dmg
+*.pkg
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# macOS
+.DS_Store
+
+# Logs
+logs/
+*.log

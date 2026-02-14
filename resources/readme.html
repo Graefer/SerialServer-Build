@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; padding: 20px; }
+        code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: Menlo, Monaco, monospace; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Installation</h1>
+    <p>Der Installer führt folgende Schritte durch:</p>
+    <ol>
+        <li>Kopiert Programmdateien nach <code>/usr/local/serialserver</code></li>
+        <li>Erstellt Python Virtual Environment</li>
+        <li>Installiert benötigte Python-Pakete (Flask, PySerial)</li>
+        <li>Richtet LaunchDaemon für automatischen Start ein</li>
+        <li>Startet den Service</li>
+    </ol>
+
+    <h2>Nach der Installation</h2>
+    <p>Der Server ist sofort verfügbar unter:</p>
+    <ul>
+        <li><strong>HTTP-API:</strong> <code>http://localhost:8765</code></li>
+        <li><strong>WebSocket:</strong> <code>ws://localhost:8765/ws</code></li>
+        <li><strong>Health-Check:</strong> <code>http://localhost:8765/health</code></li>
+    </ul>
+
+    <h2>Konfiguration</h2>
+    <p>Passen Sie die Geräte-Konfiguration an in:</p>
+    <pre>/usr/local/serialserver/config.json</pre>
+
+    <p>Nach Änderungen Service neu starten:</p>
+    <pre>sudo launchctl kickstart -k system/com.serialserver</pre>
+</body>
+</html>

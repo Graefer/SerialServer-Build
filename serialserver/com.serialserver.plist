@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.serialserver</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/serialserver/venv/bin/python</string>
+        <string>/usr/local/serialserver/server.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/usr/local/serialserver</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/usr/local/serialserver/logs/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/usr/local/serialserver/logs/stderr.log</string>
+    <key>UserName</key>
+    <string>root</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>
