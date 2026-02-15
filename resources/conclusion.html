@@ -13,12 +13,16 @@
     <div class="success">✅</div>
     <h1 style="text-align: center;">Installation erfolgreich!</h1>
 
-    <p style="text-align: center;">Der Serial WebSocket Server läuft jetzt im Hintergrund.</p>
+    <p style="text-align: center;">Der Serial WebSocket Server läuft jetzt im Hintergrund.<br>
+    Serial Ports werden automatisch geöffnet wenn die PVS-App verbindet.</p>
 
     <div class="box">
         <h3>Schnellstart</h3>
         <p>Server-Status prüfen im Terminal:</p>
         <code>curl http://localhost:8765/health</code>
+
+        <p style="margin-top: 15px;">Geräte-Status anzeigen:</p>
+        <code>curl http://localhost:8765/devices</code>
 
         <p style="margin-top: 15px;">Logs anzeigen:</p>
         <code>tail -f /usr/local/serialserver/logs/server.log</code>

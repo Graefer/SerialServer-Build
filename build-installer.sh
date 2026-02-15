@@ -3,7 +3,7 @@
 set -e
 
 echo "╔════════════════════════════════════════════╗"
-echo "║   Serial Server Installer Builder v1.2    ║"
+echo "║   Serial Server Installer Builder v1.3    ║"
 echo "╚════════════════════════════════════════════╝"
 echo ""
 
@@ -29,7 +29,7 @@ if [ -d resources ]; then
     cp resources/*.html build/resources/ 2>/dev/null || true
 fi
 
-# ── Post-Install Script ─────────────────────────────────────────────
+# ── Post-Install Script ─────────────────────────────────────────────────────
 echo "📝 Erstelle Post-Install Script..."
 cat > build/scripts/postinstall << 'EOFPOST'
 #!/bin/bash
@@ -115,7 +115,7 @@ EOFPOST
 
 chmod +x build/scripts/postinstall
 
-# ── Pre-Install Script ───────────────────────────────────────────────
+# ── Pre-Install Script ───────────────────────────────────────────────────────
 echo "📝 Erstelle Pre-Install Script..."
 cat > build/scripts/preinstall << 'EOFPRE'
 #!/bin/bash
@@ -131,7 +131,7 @@ EOFPRE
 
 chmod +x build/scripts/preinstall
 
-# ── Distribution XML (korrigiert: kein doppeltes <options>) ──────────
+# ── Distribution XML (korrigiert: kein doppeltes <options>) ──────────────
 echo "📝 Erstelle Distribution XML..."
 cat > build/distribution.xml << 'EOFDIST'
 <?xml version="1.0" encoding="utf-8"?>
@@ -156,7 +156,7 @@ cat > build/distribution.xml << 'EOFDIST'
         <pkg-ref id="com.serialserver.pkg"/>
     </choice>
 
-    <pkg-ref id="com.serialserver.pkg" version="1.2" onConclusion="none">SerialServer-component.pkg</pkg-ref>
+    <pkg-ref id="com.serialserver.pkg" version="1.3" onConclusion="none">SerialServer-component.pkg</pkg-ref>
 
     <installation-check script="pm_install_check();"/>
     <script>
@@ -164,7 +164,7 @@ cat > build/distribution.xml << 'EOFDIST'
         function pm_install_check() {
             if(system.compareVersions(system.version.ProductVersion, '10.15') < 0) {
                 my.result.title = 'Nicht kompatibel';
-                my.result.message = 'Dieses Paket benötigt macOS 10.15 (Catalina) oder neuer.';
+                my.result.message = 'Dieses Paket ben\u00f6tigt macOS 10.15 (Catalina) oder neuer.';
                 my.result.type = 'Fatal';
                 return false;
             }
@@ -175,12 +175,12 @@ cat > build/distribution.xml << 'EOFDIST'
 </installer-gui-script>
 EOFDIST
 
-# ── Component Package bauen ──────────────────────────────────────────
+# ── Component Package bauen ──────────────────────────────────────────────────
 echo "🔨 Baue Component Package..."
 pkgbuild --root build/pkg-root \
          --scripts build/scripts \
          --identifier com.serialserver \
-         --version 1.2 \
+         --version 1.3 \
          --install-location / \
          build/SerialServer-component.pkg
 
@@ -190,7 +190,7 @@ if [ $? -ne 0 ]; then
 fi
 echo "✓ Component Package erstellt"
 
-# ── Product Package bauen ────────────────────────────────────────────
+# ── Product Package bauen ────────────────────────────────────────────────────
 echo "🔨 Baue Product Package..."
 productbuild --distribution build/distribution.xml \
              --resources build/resources \
@@ -203,7 +203,7 @@ if [ $? -ne 0 ]; then
 fi
 echo "✓ Product Package erstellt"
 
-# ── Uninstall Script für DMG ─────────────────────────────────────────
+# ── Uninstall Script für DMG ─────────────────────────────────────────────────
 echo "📝 Erstelle Uninstall Script..."
 cat > build/dmg/uninstall.sh << 'EOFUNINSTALL'
 #!/bin/bash
@@ -248,9 +248,9 @@ EOFUNINSTALL
 
 chmod +x build/dmg/uninstall.sh
 
-# ── README für DMG ───────────────────────────────────────────────────
+# ── README für DMG ─────────────────────────────────────────────────────────
 cat > build/dmg/README.txt << 'EOFREADME'
-Serial WebSocket Server v1.2
+Serial WebSocket Server v1.3
 =============================
 
 Installation:
@@ -277,12 +277,12 @@ EOFREADME
 # PKG ins DMG kopieren
 cp build/SerialServer.pkg build/dmg/
 
-# ── DMG erstellen ────────────────────────────────────────────────────
+# ── DMG erstellen ──────────────────────────────────────────────────────────
 echo "💿 Erstelle DMG..."
-hdiutil create -volname "Serial Server 1.2" \
+hdiutil create -volname "Serial Server 1.3" \
                -srcfolder build/dmg \
                -ov -format UDZO \
-               SerialServer-1.2.dmg
+               SerialServer-1.3.dmg
 
 if [ $? -ne 0 ]; then
     echo "❌ DMG-Erstellung fehlgeschlagen"
@@ -290,14 +290,14 @@ if [ $? -ne 0 ]; then
 fi
 
 # Ergebnis
-SIZE=$(du -h SerialServer-1.2.dmg | cut -f1)
+SIZE=$(du -h SerialServer-1.3.dmg | cut -f1)
 
 echo ""
 echo "╔════════════════════════════════════════════╗"
 echo "║          ✅ BUILD ERFOLGREICH!            ║"
 echo "╚════════════════════════════════════════════╝"
 echo ""
-echo "📦 Datei:  SerialServer-1.2.dmg"
+echo "📦 Datei:  SerialServer-1.3.dmg"
 echo "📊 Größe:  $SIZE"
 echo ""
 echo "Inhalt des DMG:"
@@ -306,7 +306,7 @@ echo "  • uninstall.sh      (Deinstallation)"
 echo "  • README.txt        (Anleitung)"
 echo ""
 echo "Zum Testen:"
-echo "  1. open SerialServer-1.2.dmg"
+echo "  1. open SerialServer-1.3.dmg"
 echo "  2. SerialServer.pkg doppelklicken"
 echo "  3. Installer durchlaufen"
 echo ""
