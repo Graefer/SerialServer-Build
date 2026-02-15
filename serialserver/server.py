@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serial WebSocket Server v1.2 - Mit DTR/RTS Support für NIDEK RT-5100"""
+"""Serial WebSocket Server v1.3 - On-Demand Serial Port (öffnet nur bei WebSocket-Client)"""
 
 from flask import Flask, jsonify
 from flask_sock import Sock
@@ -41,6 +41,8 @@ CORS(app)
 port_data = {}
 active_serial_connections = {}
 websocket_clients = []
+serial_threads = {}        # device_name -> Thread
+serial_threads_running = {} # device_name -> bool (Thread-Stop-Flag)
 data_lock = threading.Lock()
 running = True
 
@@ -48,46 +50,46 @@ running = True
 def find_port_by_config(config):
     """Findet einen seriellen Port anhand der Konfiguration (VID/PID/Serial/Description)."""
     ports = serial.tools.list_ports.comports()
-    
+
     logger.debug(f"Suche Port mit Config: {config}")
     logger.debug(f"Verfügbare Ports: {len(ports)}")
-    
+
     for port in ports:
         logger.debug(f"Prüfe Port: {port.device}")
         logger.debug(f"  VID: {hex(port.vid) if port.vid else 'None'}")
         logger.debug(f"  PID: {hex(port.pid) if port.pid else 'None'}")
         logger.debug(f"  Serial: {port.serial_number}")
         logger.debug(f"  Description: {port.description}")
-        
+
         # VID Filter
         if config.get('vid'):
             expected_vid = int(config['vid'], 16) if isinstance(config['vid'], str) else config['vid']
             if port.vid != expected_vid:
                 logger.debug(f"  VID mismatch: {hex(port.vid) if port.vid else 'None'} != {hex(expected_vid)}")
                 continue
-        
+
         # PID Filter
         if config.get('pid'):
             expected_pid = int(config['pid'], 16) if isinstance(config['pid'], str) else config['pid']
             if port.pid != expected_pid:
                 logger.debug(f"  PID mismatch: {hex(port.pid) if port.pid else 'None'} != {hex(expected_pid)}")
                 continue
-        
+
         # Serial Number Filter
         if config.get('serial_number') and port.serial_number != config['serial_number']:
             logger.debug(f"  Serial mismatch: {port.serial_number} != {config['serial_number']}")
             continue
-        
+
         # Description Filter
         if config.get('description'):
             if config['description'].lower() not in port.description.lower():
                 logger.debug(f"  Description mismatch")
                 continue
-        
+
         # Wenn wir hier sind, passt der Port!
         logger.info(f"Port gefunden: {port.device}")
         return port.device
-    
+
     logger.warning("Kein passender Port gefunden!")
     return None
 
@@ -103,6 +105,12 @@ def broadcast_to_clients(message):
                 dead_clients.append(ws)
         for ws in dead_clients:
             websocket_clients.remove(ws)
+
+
+def get_client_count():
+    """Gibt die aktuelle Anzahl der WebSocket-Clients zurück."""
+    with data_lock:
+        return len(websocket_clients)
 
 
 def read_serial_port(device_config):
@@ -124,9 +132,9 @@ def read_serial_port(device_config):
     last_receive_time = None  # Zeitpunkt des letzten empfangenen Bytes
     MESSAGE_TIMEOUT = 0.5  # Sekunden ohne Daten = Block komplett
     port_path = None
-    logger.info(f"[{device_name}] Thread gestartet")
+    logger.info(f"[{device_name}] Serial-Thread gestartet (Client verbunden)")
 
-    while running:
+    while running and serial_threads_running.get(device_name, False):
         try:
             # Verbindung herstellen falls nötig
             if ser is None or not ser.is_open:
@@ -147,15 +155,15 @@ def read_serial_port(device_config):
                     ser.rts = False
                     logger.info(f"[{device_name}] DTR=True, RTS=False gesetzt")
                     time.sleep(0.2)
-                    
+
                     with data_lock:
                         active_serial_connections[device_name] = ser
                         port_data[device_name]['connected'] = True
                         port_data[device_name]['port'] = port_path
-                    
+
                     logger.info(f"[{device_name}] Verbunden: {port_path}")
                     logger.info(f"[{device_name}] Config: {device_config['baudrate']}/{device_config['databits']}-{device_config['parity']}-{device_config['stopbits']}")
-                    
+
                     broadcast_to_clients({
                         'type': 'device_status',
                         'device': device_name,
@@ -233,6 +241,7 @@ def read_serial_port(device_config):
                 ser = None
             with data_lock:
                 port_data[device_name]['connected'] = False
+                active_serial_connections.pop(device_name, None)
             broadcast_to_clients({
                 'type': 'device_status',
                 'device': device_name,
@@ -240,15 +249,52 @@ def read_serial_port(device_config):
                 'timestamp': datetime.now().isoformat()
             })
             time.sleep(2)
-        
+
         except Exception as e:
             logger.error(f"[{device_name}] Unerwarteter Fehler: {e}")
             time.sleep(2)
 
-    # Cleanup beim Beenden
+    # Cleanup: Serial Port schließen wenn Thread stoppt
     if ser and ser.is_open:
         ser.close()
-    logger.info(f"[{device_name}] Thread beendet")
+        logger.info(f"[{device_name}] Serial Port geschlossen")
+    with data_lock:
+        port_data[device_name]['connected'] = False
+        active_serial_connections.pop(device_name, None)
+    broadcast_to_clients({
+        'type': 'device_status',
+        'device': device_name,
+        'connected': False,
+        'timestamp': datetime.now().isoformat()
+    })
+    logger.info(f"[{device_name}] Serial-Thread beendet (kein Client mehr)")
+
+
+def start_serial_threads():
+    """Startet Serial-Reader-Threads für alle konfigurierten Geräte."""
+    for device_config in CONFIG['devices']:
+        device_name = device_config['name']
+        # Prüfen ob Thread bereits läuft
+        if device_name in serial_threads and serial_threads[device_name].is_alive():
+            logger.debug(f"[{device_name}] Thread läuft bereits")
+            continue
+        serial_threads_running[device_name] = True
+        t = threading.Thread(target=read_serial_port, args=(device_config,), daemon=True)
+        t.start()
+        serial_threads[device_name] = t
+        logger.info(f"[{device_name}] Serial-Thread gestartet")
+
+
+def stop_serial_threads():
+    """Stoppt alle Serial-Reader-Threads und gibt Ports frei."""
+    logger.info("Stoppe alle Serial-Threads (kein Client mehr verbunden)")
+    for device_name in serial_threads_running:
+        serial_threads_running[device_name] = False
+    # Warten bis Threads beendet sind (max 3 Sekunden)
+    for device_name, t in serial_threads.items():
+        t.join(timeout=3)
+        logger.info(f"[{device_name}] Thread gestoppt")
+    serial_threads.clear()
 
 
 @app.route('/health')
@@ -261,7 +307,11 @@ def health():
                 'connected': data.get('connected', False),
                 'port': data.get('port')
             }
-    return jsonify({'status': 'healthy', 'devices': devices})
+    return jsonify({
+        'status': 'healthy',
+        'devices': devices,
+        'clients': get_client_count()
+    })
 
 
 @app.route('/devices')
@@ -275,12 +325,21 @@ def devices():
 def websocket(ws):
     """WebSocket Endpoint für Live-Daten"""
     logger.info("WebSocket Client verbunden")
-    
+
     with data_lock:
         websocket_clients.append(ws)
-    
+        client_count = len(websocket_clients)
+
+    # Erster Client: Serial-Threads starten
+    if client_count == 1:
+        logger.info("Erster Client verbunden → Serial Ports werden geöffnet")
+        start_serial_threads()
+    else:
+        logger.info(f"Client #{client_count} verbunden")
+
     try:
-        # Initial state sammeln (unter Lock) und senden (ohne Lock)
+        # Initial state senden (kurz warten damit Threads starten können)
+        time.sleep(0.3)
         with data_lock:
             initial_messages = []
             for device_name, data in port_data.items():
@@ -305,7 +364,14 @@ def websocket(ws):
         with data_lock:
             if ws in websocket_clients:
                 websocket_clients.remove(ws)
-        logger.info("WebSocket Client getrennt")
+            remaining = len(websocket_clients)
+
+        logger.info(f"WebSocket Client getrennt (verbleibend: {remaining})")
+
+        # Letzter Client weg: Serial-Threads stoppen
+        if remaining == 0:
+            logger.info("Letzter Client getrennt → Serial Ports werden geschlossen")
+            stop_serial_threads()
 
 
 def signal_handler(sig, frame):
@@ -313,38 +379,34 @@ def signal_handler(sig, frame):
     global running
     logger.info("Shutdown Signal empfangen...")
     running = False
-    
-    # Serielle Verbindungen schließen
+
+    # Serial-Threads stoppen
+    stop_serial_threads()
+
+    # Serielle Verbindungen schließen (falls noch offen)
     with data_lock:
         for ser in active_serial_connections.values():
             if ser and ser.is_open:
                 ser.close()
-    
+
     sys.exit(0)
 
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     logger.info("=" * 60)
-    logger.info("Serial WebSocket Server v1.2 - NIDEK RT-5100 Edition")
+    logger.info("Serial WebSocket Server v1.3 - On-Demand Edition")
     logger.info("=" * 60)
     logger.info(f"Config: {config_path}")
     logger.info(f"Geräte: {len(CONFIG['devices'])}")
-    
-    # Device-Threads starten
-    threads = []
-    for device_config in CONFIG['devices']:
-        logger.info(f"Starte Thread für: {device_config['name']}")
-        t = threading.Thread(target=read_serial_port, args=(device_config,), daemon=True)
-        t.start()
-        threads.append(t)
-    
-    # Flask Server starten
+    logger.info("Serial Ports werden erst bei WebSocket-Verbindung geöffnet")
+
+    # Flask Server starten (KEINE Serial-Threads hier – erst bei Client-Verbindung)
     host = CONFIG['server']['host']
     port = CONFIG['server']['port']
     logger.info(f"Server startet auf {host}:{port}")
     logger.info("=" * 60)
-    
+
     app.run(host=host, port=port, debug=False)
